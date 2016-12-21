@@ -1,0 +1,3 @@
+[submodule "plotly_py"]
+	path = plotly_py
+	url = https://github.com/plotly/plotly.py.git
