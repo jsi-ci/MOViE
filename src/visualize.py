@@ -100,6 +100,46 @@ def js_inject_graph_on_click(div_ids):
     return res
 
 
+def create_html_document(figures, link_plots=False):
+    """ Given a list of plotly graph objects, return a hmtl document
+    where each plot (figure) is drawn in a div element. Base plotly
+    library and additional script are included.
+
+    :param figures: a list of figures
+    :param link_plots: if True, scripts are injected to enable selection
+    of points across all created plots. In this instance, traces must be
+    uniquely named and each marker color must be forwarded as a list of
+    colors (strings). If two traces hold the same name, they are presumed
+    to display the same data.
+    """
+    divs = [offline.plot(fig, output_type='div', show_link=False,
+                         include_plotlyjs=False) for fig in figures]
+
+    # regex matching deemed safer than calls to
+    # protected functions (offline._plot_html)
+    div_ids = [re.search(r'div id=[\"\']([\w\-]+)[\"\']', div).group(1)
+               for div in divs]
+
+    extra_scripts = []
+
+    if link_plots:
+        extra_scripts.extend([js_inject_graph_variables(div_ids),
+                              js_inject_graph_on_click(div_ids)])
+
+    # # # TODO: resize scripts not needed?
+    # # # TODO: image downloads
+
+    with open('output.html', 'w') as f:
+        f.write(''.join([
+            '<html>',
+            '<head><meta charset="utf-8" /></head>',
+            '<body>',
+            js_get_plotly(),
+            *divs,
+            *extra_scripts,
+            '</body>',
+            '</html>']))
+
 if __name__ == "__main__":
     # print all possible graph objects
     print(graph_objs.graph_objs.__all__)
