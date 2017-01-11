@@ -1,3 +1,8 @@
+import os
+import re
+from collections import defaultdict
+from pkg_resources import resource_string
+
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
@@ -6,6 +11,94 @@ import plotly.plotly as py
 import plotly.offline as offline
 import plotly.graph_objs as graph_objs
 from plotly.tools import FigureFactory as FF
+
+
+def js_get_plotly():
+    """ Minimized plotly.js library.
+
+    :return:
+        res : string
+    """
+    path = os.path.join('offline', 'plotly.min.js')
+    plotlyjs = resource_string('plotly', path).decode('utf-8')
+
+    res = ''.join([
+        '<script type="text/javascript">',
+        plotlyjs,
+        '</script>'
+    ])
+
+    return res
+
+
+def js_inject_graph_variables(div_ids):
+    """ Code to define plot variables.
+
+    :param div_ids: a list of unique div identifiers
+
+    :return:
+        res : string
+    """
+    if not div_ids:
+        return ''
+
+    res = '\n'.join([
+        '<script type="text/javascript">',
+        *['var plot{counter} = document.getElementById(\'{div_id}\');'.format(
+            counter=i, div_id=div_id) for i, div_id in enumerate(div_ids)],
+        'var all_plots = [{}];'.format(', '.join('plot' + str(i) for i in
+                                                 range(len(div_ids)))),
+        '</script>'
+    ])
+
+    return res
+
+
+def js_inject_graph_on_click(div_ids):
+    """ Code to define on-click functions for all plots and link
+    selection.
+
+    :param div_ids: a list of unique div identifiers
+
+    :return:
+        res : string
+    """
+    if not div_ids:
+        return ''
+
+    res = '\n'.join([
+        '<script type="text/javascript">',
+        'var redrawing = false;',
+        *[('plot{counter}.on'.format(counter=i) +
+           '(\'plotly_click\', function (data){'
+           'if (!redrawing){'
+           'var pt_number = data.points[0].pointNumber;'
+           'var trace_name = data.points[0].data.name;'
+           'redrawing = true;'
+           'update_and_restyle(pt_number, trace_name);'
+           '} else {redrawing=false;}'
+           '});') for i, div_id in enumerate(div_ids)],
+        'function update_and_restyle(a, name){'
+        'for (var i = 0; i < all_plots.length; i++) {'
+        'var colors = [];'
+        'var update_needed = false;'
+        'for (var j = 0; j < all_plots[i].data.length; j++){'
+        'var trace = all_plots[i].data[j];'
+        'var trace_color_array = trace.marker.color;'
+        'if (trace.name == name){'
+        'update_needed = true;'
+        'trace_color_array[a] = invert_color(trace_color_array[a]);}'
+        'colors.push(trace_color_array);}'
+        'if (update_needed)'
+        'Plotly.restyle(all_plots[i], \'marker.color\', colors);}}',
+        'function invert_color(color){'
+        'if (color == \'red\') return \'green\';'
+        'return \'red\';}',
+        '</script>'
+    ])
+
+    return res
+
 
 if __name__ == "__main__":
     # print all possible graph objects
