@@ -141,6 +141,10 @@ def create_custom_html_document(figures, link_plots=False):
             '</html>']))
 
 
+def hyper_space_diagonal_counting():
+    pass
+
+
 def distance_and_distribution_chart(approximation_sets, names=None,
                                     sort_by_col=0, output_html=False):
     """
@@ -256,17 +260,13 @@ def distance_and_distribution_chart(approximation_sets, names=None,
         layout_distance_metric = dict(title='Distance chart',
                                       xaxis=dict(title=''),
                                       yaxis=dict(title='distance'))
-
         layout_distribution_metric = dict(title='Distribution chart',
                                           xaxis=dict(title=''),
                                           yaxis=dict(title='distribution'))
-
         fig_distance_metric = dict(data=data_distance_metric,
                                    layout=layout_distance_metric)
-
         fig_distribution_metric = dict(data=data_distribution_metric,
                                        layout=layout_distribution_metric)
-
         create_custom_html_document([fig_distance_metric,
                                      fig_distribution_metric])
 
