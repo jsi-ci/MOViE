@@ -54,8 +54,8 @@ def js_inject_graph_variables(div_ids):
     return res
 
 
-def js_inject_graph_on_click(div_ids):
-    """ Code to define on-click functions for all plots and link
+def js_inject_link_selection(div_ids):
+    """ Code to define on-click functions for all plots in order to link
     selection.
 
     :param div_ids: a list of unique div identifiers
@@ -100,10 +100,10 @@ def js_inject_graph_on_click(div_ids):
     return res
 
 
-def create_html_document(figures, link_plots=False):
-    """ Given a list of plotly graph objects, return a hmtl document
-    where each plot (figure) is drawn in a div element. Base plotly
-    library and additional script are included.
+def create_custom_html_document(figures, link_plots=False):
+    """ Given a list of plot.ly graph objects, create a HTML document
+    where each plot (figure) is drawn in a div element. Base plot.ly
+    library and additional scripts are included.
 
     :param figures: a list of figures
     :param link_plots: if True, scripts are injected to enable selection
@@ -124,7 +124,7 @@ def create_html_document(figures, link_plots=False):
 
     if link_plots:
         extra_scripts.extend([js_inject_graph_variables(div_ids),
-                              js_inject_graph_on_click(div_ids)])
+                              js_inject_link_selection(div_ids)])
 
     # # # TODO: resize scripts not needed?
     # # # TODO: image downloads
@@ -139,6 +139,139 @@ def create_html_document(figures, link_plots=False):
             *extra_scripts,
             '</body>',
             '</html>']))
+
+
+def distance_and_distribution_chart(approximation_sets, names=None,
+                                    sort_by_col=0, output_html=False):
+    """
+    Visualization method.
+
+    Plot the non-dominated solutions against their distances to the
+    approximate Pareto front (distance chart) and their distances
+    between each other (distribution chart). The approximation of the
+    Pareto front is determined by considering all non-dominated vectors
+    from the forwarded approximation sets.
+
+    Parameters
+    ----------
+    approximation_sets : list of ndarray
+        Visualize these approximation sets.
+    names : list of str
+        Optional list of approximation sets' names.
+    sort_by_col : int
+        Sort solutions by this objective (to calculate distributions).
+    output_html : bool
+        If True, figures are plotted and a HTML document is output.
+
+    Returns
+    -------
+    distances : list of ndarray
+        For each approximation set, distances between the non-dominated
+        solutions and the approximate Pareto front.
+    distributions : list of ndarray
+        For each approximation set, distances between the non-dominated
+        solutions within the set, taking into consideration the distance
+        between the boundary solutions and the approximate Pareto front.
+
+    Notes
+    -----
+    Returned distance and distribution ndarrays for a given
+    approximation set are ordered in the same manner.
+
+    Taking into consideration the distance between the boundary
+    solutions and the approximate Pareto front, for a given
+    approximation set:
+
+        len(distance) == len(distribution) + 1
+
+    References
+    ----------
+    .. [1] "Visualization Technique for Analyzing Non-Dominated Set
+           Comparison", Kiam Heong Ang, Gregory Chong, and Yun Li,
+           University of Glasgow
+    """
+    assert (approximation_sets and len(approximation_sets) == len(names)
+            if names is not None else True)
+
+    # order the approximation sets by the chosen objective function
+    approximation_sets = [a[a[:, sort_by_col].argsort()]
+                          for a in approximation_sets]
+
+    # determine all non-dominated vectors
+    combined = np.row_stack(approximation_sets)
+    non_dominated_indices = np.ones(combined.shape[0], dtype=bool)
+    for i, vec in enumerate(combined):
+        if non_dominated_indices[i]:
+            non_dominated_indices[non_dominated_indices] = np.any(
+                combined[non_dominated_indices] <= vec, axis=1)
+
+    # Pareto front approximation ordered by the chosen objective function
+    p_approx = combined[non_dominated_indices]
+    p_approx = p_approx[p_approx[:, sort_by_col].argsort()]
+    p_span = np.amax(p_approx, axis=0) - np.amin(p_approx, axis=0)
+
+    # calculate split indices to later partition the distance vector
+    cnt = 0
+    splits = []
+    for a in approximation_sets:
+        splits.append((cnt, cnt + a.shape[0]))
+        cnt += a.shape[0]
+
+    # distance metric
+    distances = np.array([0 if non_dominated_indices[i] else
+                          min(np.linalg.norm((vec - n_d) / p_span)
+                              for n_d in p_approx)
+                          for i, vec in enumerate(combined)], dtype=float)
+
+    distances = distances / distances.max()
+    distances = [distances[s[0]:s[1]] for s in splits]
+
+    # distribution metric
+    distributions = []
+    for a in approximation_sets:
+        temp = np.row_stack((p_approx[0], a, p_approx[-1]))
+        distributions.append([np.linalg.norm((temp[i] - temp[i+1]) / p_span)
+                              for i in range(temp.shape[0] - 1)])
+
+    d_max = np.hstack(distributions).max()
+    distributions = [np.array(d) / d_max for d in distributions]
+
+    if output_html:
+        data_distance_metric = []
+        data_distribution_metric = []
+
+        for i, a in enumerate(approximation_sets):
+            data_distance_metric.append(graph_objs.Scatter(
+                x=np.arange(len(distances[i])),
+                y=distances[i],
+                mode='lines',
+                name=names[i] if names is not None else ''))
+
+            data_distribution_metric.append(graph_objs.Scatter(
+                x=np.arange(len(distributions[i])),
+                y=distributions[i],
+                mode='lines',
+                name=names[i] if names is not None else ''))
+
+        layout_distance_metric = dict(title='Distance chart',
+                                      xaxis=dict(title=''),
+                                      yaxis=dict(title='distance'))
+
+        layout_distribution_metric = dict(title='Distribution chart',
+                                          xaxis=dict(title=''),
+                                          yaxis=dict(title='distribution'))
+
+        fig_distance_metric = dict(data=data_distance_metric,
+                                   layout=layout_distance_metric)
+
+        fig_distribution_metric = dict(data=data_distribution_metric,
+                                       layout=layout_distribution_metric)
+
+        create_custom_html_document([fig_distance_metric,
+                                     fig_distribution_metric])
+
+    return distances, distributions
+
 
 if __name__ == "__main__":
     # print all possible graph objects
@@ -232,3 +365,11 @@ if __name__ == "__main__":
 
     offline.plot(fig, show_link=False, filename='PCA_scatter_plot.html',
                  auto_open=False)
+
+    """Distance and distribution chart"""
+    lin_approx_set = np.loadtxt("../MOViE-mnozice/4d.linear.300.txt")
+    sph_approx_set = np.loadtxt("../MOViE-mnozice/4d.spherical.300.txt")
+
+    distance_and_distribution_chart([lin_approx_set, sph_approx_set],
+                                    names=('linear', 'spherical'),
+                                    output_html=True)
