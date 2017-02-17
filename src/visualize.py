@@ -146,7 +146,7 @@ def hyper_space_diagonal_counting():
 
 
 def distance_and_distribution_chart(approximation_sets, names=None,
-                                    sort_by_col=0, output_html=False):
+                                    sort_by_col=0):
     """
     Visualization method.
 
@@ -164,11 +164,12 @@ def distance_and_distribution_chart(approximation_sets, names=None,
         Optional list of approximation sets' names.
     sort_by_col : int
         Sort solutions by this objective (to calculate distributions).
-    output_html : bool
-        If True, figures are plotted and a HTML document is output.
 
     Returns
     -------
+    figures : list of Figure
+        Two figures are returned, a distance chart & a distribution
+        chart.
     distances : list of ndarray
         For each approximation set, distances between the non-dominated
         solutions and the approximate Pareto front.
@@ -182,20 +183,20 @@ def distance_and_distribution_chart(approximation_sets, names=None,
     Returned distance and distribution ndarrays for a given
     approximation set are ordered in the same manner.
 
-    Taking into consideration the distance between the boundary
-    solutions and the approximate Pareto front, for a given
-    approximation set:
-
-        len(distance) == len(distribution) + 1
-
     References
     ----------
     .. [1] "Visualization Technique for Analyzing Non-Dominated Set
            Comparison", Kiam Heong Ang, Gregory Chong, and Yun Li,
            University of Glasgow
+    .. [2] "Recent Advances in Simulated Evolution and Learning",
+           Kay Chen Tan, Meng Hiot Lim, Xin Yao, Lipo Wang,
+           World Scientific, 2004
     """
     assert (approximation_sets and len(approximation_sets) == len(names)
             if names is not None else True)
+
+    assert (len(set(a.shape[1] for a in approximation_sets)) == 1
+            and sort_by_col < approximation_sets[0].shape[1])
 
     # order the approximation sets by the chosen objective function
     approximation_sets = [a[a[:, sort_by_col].argsort()]
@@ -240,38 +241,38 @@ def distance_and_distribution_chart(approximation_sets, names=None,
     d_max = np.hstack(distributions).max()
     distributions = [np.array(d) / d_max for d in distributions]
 
-    if output_html:
-        data_distance_metric = []
-        data_distribution_metric = []
+    # create figures
+    data_distance_metric = []
+    data_distribution_metric = []
+    for i, a in enumerate(approximation_sets):
+        data_distance_metric.append(graph_objs.Scatter(
+            x=np.arange(len(distances[i])),
+            y=distances[i],
+            mode='lines',
+            name=names[i] if names is not None else ''))
 
-        for i, a in enumerate(approximation_sets):
-            data_distance_metric.append(graph_objs.Scatter(
-                x=np.arange(len(distances[i])),
-                y=distances[i],
-                mode='lines',
-                name=names[i] if names is not None else ''))
+        data_distribution_metric.append(graph_objs.Scatter(
+            x=np.arange(len(distributions[i])),
+            y=distributions[i],
+            mode='lines',
+            name=names[i] if names is not None else ''))
 
-            data_distribution_metric.append(graph_objs.Scatter(
-                x=np.arange(len(distributions[i])),
-                y=distributions[i],
-                mode='lines',
-                name=names[i] if names is not None else ''))
+    layout_distance_metric = dict(title='Distance chart',
+                                  xaxis=dict(title=''),
+                                  yaxis=dict(title='distance'))
 
-        layout_distance_metric = dict(title='Distance chart',
+    layout_distribution_metric = dict(title='Distribution chart',
                                       xaxis=dict(title=''),
-                                      yaxis=dict(title='distance'))
-        layout_distribution_metric = dict(title='Distribution chart',
-                                          xaxis=dict(title=''),
-                                          yaxis=dict(title='distribution'))
-        fig_distance_metric = dict(data=data_distance_metric,
-                                   layout=layout_distance_metric)
-        fig_distribution_metric = dict(data=data_distribution_metric,
-                                       layout=layout_distribution_metric)
-        create_custom_html_document([fig_distance_metric,
-                                     fig_distribution_metric])
+                                      yaxis=dict(title='distribution'))
 
-    return distances, distributions
+    fig_distance_metric = dict(data=data_distance_metric,
+                               layout=layout_distance_metric)
 
+    fig_distribution_metric = dict(data=data_distribution_metric,
+                                   layout=layout_distribution_metric)
+
+    return ([fig_distance_metric, fig_distribution_metric], distances,
+            distributions)
 
 if __name__ == "__main__":
     # print all possible graph objects
@@ -370,6 +371,7 @@ if __name__ == "__main__":
     lin_approx_set = np.loadtxt("../MOViE-mnozice/4d.linear.300.txt")
     sph_approx_set = np.loadtxt("../MOViE-mnozice/4d.spherical.300.txt")
 
-    distance_and_distribution_chart([lin_approx_set, sph_approx_set],
-                                    names=('linear', 'spherical'),
-                                    output_html=True)
+    result = distance_and_distribution_chart([lin_approx_set, sph_approx_set],
+                                             names=('linear', 'spherical'))
+
+    create_custom_html_document(result[0])
