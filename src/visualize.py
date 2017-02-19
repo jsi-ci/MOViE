@@ -127,7 +127,7 @@ def create_custom_html_document(figures, link_plots=False):
                               js_inject_link_selection(div_ids)])
 
     # # # TODO: resize scripts not needed?
-    # # # TODO: image downloads
+    # # # TODO: pdf image downloads
 
     with open('output.html', 'w') as f:
         f.write(''.join([
@@ -144,11 +144,88 @@ def create_custom_html_document(figures, link_plots=False):
 def custom_assertions(visualization_method):
     def inner(approximation_sets, names=None, *args):
         assert (approximation_sets and len(approximation_sets) == len(names)
-                if names is not None else True)
+                if names else True)
         assert len(set(a.shape[1] for a in approximation_sets)) == 1
         return visualization_method(approximation_sets, names, *args)
 
     return inner
+
+
+@custom_assertions
+def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
+
+    # TODO: documentation, axis naming
+
+    def index_pairing(binned_vec):
+        def pair():  # Cantor's pairing function
+            return int((x+y) * (x+y+1) / 2 + y)
+
+        def another_pair():  # http://szudzik.com/ElegantPairing.pdf
+            return int((x**2 + 3*x + 2*x*y + y + y**2) / 2)
+
+        def elegant_pair():  # http://szudzik.com/ElegantPairing.pdf
+            return int(y**2 + x if x < y else x**2 + x + y)
+
+        num_dim = binned_vec.size
+        if num_dim == 1:
+            return binned_vec.tolist()
+        if num_dim == 2:
+            x, y = binned_vec
+            return [another_pair()]
+
+        return index_pairing(index_pairing(binned_vec[:int(num_dim/2)]) +
+                             index_pairing(binned_vec[int(num_dim/2):])
+                             if binned_vec.size % 2 == 1 else
+                             index_pairing(binned_vec[:2]) +
+                             index_pairing(binned_vec[2:]))
+
+    # determine bins for each of the objective functions
+    combined = np.row_stack(approximation_sets)
+    col_min, col_max = np.amin(combined, axis=0), np.amax(combined, axis=0)
+    col_bins = [np.linspace(min_, max_, num_bins + 1)
+                for min_, max_ in zip(col_min, col_max)]
+
+    # reformulate according to the previous step
+    approximation_sets = [np.column_stack(np.digitize(col, col_bins[i])
+                                          for i, col in enumerate(a.T)) - 1
+                          for a in approximation_sets]
+
+    # if necessary, represent multiple functions on each single axis
+    approximation_sets = (approximation_sets if combined.shape[1] == 2 else
+                          [np.row_stack(index_pairing(vec[:int(vec.size/2)]) +
+                                        index_pairing(vec[int(vec.size/2):])
+                                        for vec in a)
+                           for a in approximation_sets])
+
+    # there may only be two dimensions remaining
+    assert all(a.shape[1] == 2 for a in approximation_sets)
+
+    # create figure
+    data = []
+    combined = np.row_stack(approximation_sets)
+    max_x, max_y = np.amax(combined, axis=0)
+    for i, a in enumerate(approximation_sets):
+        temp = np.zeros((max_x+1, max_y+1))
+        for vec in a:
+            temp[vec[0], vec[1]] += 1
+
+        x, y, z = [], [], []
+        for x_, smh in enumerate(temp):
+            for y_, cnt in enumerate(smh):
+                x.extend([x_, x_, None])
+                y.extend([y_, y_, None])
+                z.extend([0, cnt, None])
+
+        data.append(graph_objs.Scatter3d(x=x, y=y, z=z,
+                                         name=names[i] if names else '',
+                                         mode='lines'))
+
+    layout = dict(title='Hyper Space Diagonal Counting',
+                  xaxis=dict(title=''),
+                  yaxis=dict(title=''))
+
+    fig = dict(data=data, layout=layout)
+    return [fig, ]
 
 
 def distance_and_distribution_chart(approximation_sets, names=None,
@@ -199,7 +276,7 @@ def distance_and_distribution_chart(approximation_sets, names=None,
            World Scientific, 2004
     """
     assert (approximation_sets and len(approximation_sets) == len(names)
-            if names is not None else True)
+            if names else True)
 
     assert (len(set(a.shape[1] for a in approximation_sets)) == 1
             and sort_by_col < approximation_sets[0].shape[1])
@@ -255,13 +332,13 @@ def distance_and_distribution_chart(approximation_sets, names=None,
             x=np.arange(len(distances[i])),
             y=distances[i],
             mode='lines',
-            name=names[i] if names is not None else ''))
+            name=names[i] if names else ''))
 
         data_distribution_metric.append(graph_objs.Scatter(
             x=np.arange(len(distributions[i])),
             y=distributions[i],
             mode='lines',
-            name=names[i] if names is not None else ''))
+            name=names[i] if names else ''))
 
     layout_distance_metric = dict(title='Distance chart',
                                   xaxis=dict(title=''),
