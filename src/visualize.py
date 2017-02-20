@@ -148,7 +148,7 @@ def custom_assertions(visualization_method):
         assert approximation_sets and approximation_sets[0].shape[1] > 1
         # equal number of approximation sets and names
         assert len(approximation_sets) == len(names) if names else True
-        # equal number of objective functions for all approximation sets
+        # equal number of objectives (dims) for all approximation sets
         assert len(set(a.shape[1] for a in approximation_sets)) == 1
         return visualization_method(approximation_sets, names, *args)
 
@@ -195,8 +195,7 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
            Pareto Frontier", G. Agrawal , C. L. Bloebaum , K. Lewis,
            University at Buffalo
     """
-
-    # TODO: axis naming
+    # TODO: camera settings
 
     def index_pairing(binned_vec):
         def pair():  # Cantor's pairing function
@@ -232,16 +231,23 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
                                           for i, col in enumerate(a.T)) - 1
                           for a in approximation_sets]
 
-    # if more than 2 dim, represent multiple functions on each single axis
-    approximation_sets = (approximation_sets if combined.shape[1] == 2 else
+    # generate axis identifiers for late use
+    num_dim = approximation_sets[0].shape[1]
+    axis = (','.join('f{}'.format(i) for i in range(int(num_dim/2))),
+            ','.join('f{}'.format(i) for i in range(int(num_dim/2), num_dim)),
+            'number of vectors')
+
+    # if more than 2 dims, represent multiple objectives on each single axis
+    approximation_sets = (approximation_sets if num_dim == 2 else
                           [np.row_stack(index_pairing(vec[:int(vec.size/2)]) +
                                         index_pairing(vec[int(vec.size/2):])
                                         for vec in a)
                            for a in approximation_sets])
 
+    # double-check the previous step
     assert all(a.shape[1] == 2 for a in approximation_sets)
 
-    # create figure
+    # create a figure
     data = []
     combined = np.row_stack(approximation_sets)
     max_x, max_y = np.amax(combined, axis=0)
@@ -261,9 +267,11 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
                                          name=names[i] if names else '',
                                          mode='lines'))
 
-    layout = dict(title='Hyper Space Diagonal Counting',
-                  xaxis=dict(title=''),
-                  yaxis=dict(title=''))
+    layout = graph_objs.Layout(title='Hyper Space Diagonal Counting',
+                               scene=graph_objs.Scene(
+                                   xaxis=graph_objs.XAxis(title=axis[0]),
+                                   yaxis=graph_objs.YAxis(title=axis[1]),
+                                   zaxis=graph_objs.ZAxis(title=axis[2])))
 
     fig = dict(data=data, layout=layout)
     return {'figures': [fig]}
@@ -321,7 +329,7 @@ def distance_and_distribution_chart(approximation_sets, names=None,
     """
     assert sort_by_col < approximation_sets[0].shape[1]
 
-    # order the approximation sets by the chosen objective function
+    # order the approximation sets by the chosen objective
     approximation_sets = [a[a[:, sort_by_col].argsort()]
                           for a in approximation_sets]
 
@@ -333,7 +341,7 @@ def distance_and_distribution_chart(approximation_sets, names=None,
             non_dominated_indices[non_dominated_indices] = np.any(
                 combined[non_dominated_indices] <= vec, axis=1)
 
-    # Pareto front approximation ordered by the chosen objective function
+    # Pareto front approximation ordered by the chosen objective
     p_approx = combined[non_dominated_indices]
     p_approx = p_approx[p_approx[:, sort_by_col].argsort()]
     p_span = np.amax(p_approx, axis=0) - np.amin(p_approx, axis=0)
@@ -398,4 +406,10 @@ def distance_and_distribution_chart(approximation_sets, names=None,
             'distances': distances, 'distributions': distributions}
 
 if __name__ == "__main__":
-    pass
+    lin_approx_set = np.loadtxt("../MOViE-mnozice/4d.linear.300.txt")
+    sph_approx_set = np.loadtxt("../MOViE-mnozice/4d.spherical.300.txt")
+
+    output = hyper_space_diagonal_counting([lin_approx_set, sph_approx_set],
+                                           names=('linear', 'spherical'))
+
+    create_custom_html_document(output['figures'])
