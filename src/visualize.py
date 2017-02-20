@@ -1,5 +1,6 @@
 import os
 import re
+from sys import getsizeof
 from collections import defaultdict
 from pkg_resources import resource_string
 
@@ -143,8 +144,11 @@ def create_custom_html_document(figures, link_plots=False):
 
 def custom_assertions(visualization_method):
     def inner(approximation_sets, names=None, *args):
-        assert (approximation_sets and len(approximation_sets) == len(names)
-                if names else True)
+        # approximation sets must be forwarded, at least 2 dims required
+        assert approximation_sets and approximation_sets[0].shape[1] > 1
+        # equal number of approximation sets and names
+        assert len(approximation_sets) == len(names) if names else True
+        # equal number of objective functions for all approximation sets
         assert len(set(a.shape[1] for a in approximation_sets)) == 1
         return visualization_method(approximation_sets, names, *args)
 
@@ -153,8 +157,46 @@ def custom_assertions(visualization_method):
 
 @custom_assertions
 def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
+    """
+    Visualization method.
 
-    # TODO: documentation, axis naming
+    Plot a 2-D histogram that represents all dimensions in the
+    performance space. Points are reformulated using a binning technique
+    and shown as a unit cylinder along the vertical axis. Multiple
+    solutions might fall at the same set of indices, resulting in a bin
+    that might contain multiple Pareto points.
+
+    To map any number of objectives to a single axis, use a counting
+    strategy derived from complexity theory (see Cantor's pairing
+    function). Because the counting is done in an outward spiraling
+    manner, the concept of neighborhood is preserved, as is the concept
+    of going from small to large as one moves from left to right in the
+    indexing.
+
+    Parameters
+    ----------
+    approximation_sets : list of ndarray
+        Visualize these approximation sets.
+    names : list of str
+        Optional list of approximation sets' names.
+    num_bins : int
+        Reformulate solutions in this many bins along each objective.
+
+    Returns
+    -------
+    A dictionary with the following key: value pairs is returned.
+
+    figures : list of Figure
+        A single figure is included.
+
+    References
+    ----------
+    .. [1] "Intuitive Design Selection Using Visualized n-Dimensional
+           Pareto Frontier", G. Agrawal , C. L. Bloebaum , K. Lewis,
+           University at Buffalo
+    """
+
+    # TODO: axis naming
 
     def index_pairing(binned_vec):
         def pair():  # Cantor's pairing function
@@ -179,7 +221,7 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
                              index_pairing(binned_vec[:2]) +
                              index_pairing(binned_vec[2:]))
 
-    # determine bins for each of the objective functions
+    # determine bins for each of the objectives
     combined = np.row_stack(approximation_sets)
     col_min, col_max = np.amin(combined, axis=0), np.amax(combined, axis=0)
     col_bins = [np.linspace(min_, max_, num_bins + 1)
@@ -190,14 +232,13 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
                                           for i, col in enumerate(a.T)) - 1
                           for a in approximation_sets]
 
-    # if necessary, represent multiple functions on each single axis
+    # if more than 2 dim, represent multiple functions on each single axis
     approximation_sets = (approximation_sets if combined.shape[1] == 2 else
                           [np.row_stack(index_pairing(vec[:int(vec.size/2)]) +
                                         index_pairing(vec[int(vec.size/2):])
                                         for vec in a)
                            for a in approximation_sets])
 
-    # there may only be two dimensions remaining
     assert all(a.shape[1] == 2 for a in approximation_sets)
 
     # create figure
@@ -225,9 +266,10 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
                   yaxis=dict(title=''))
 
     fig = dict(data=data, layout=layout)
-    return [fig, ]
+    return {'figures': [fig]}
 
 
+@custom_assertions
 def distance_and_distribution_chart(approximation_sets, names=None,
                                     sort_by_col=0):
     """
@@ -250,6 +292,8 @@ def distance_and_distribution_chart(approximation_sets, names=None,
 
     Returns
     -------
+    A dictionary with the following key: value pairs is returned.
+
     figures : list of Figure
         Two figures are returned, a distance chart & a distribution
         chart.
@@ -275,11 +319,7 @@ def distance_and_distribution_chart(approximation_sets, names=None,
            Kay Chen Tan, Meng Hiot Lim, Xin Yao, Lipo Wang,
            World Scientific, 2004
     """
-    assert (approximation_sets and len(approximation_sets) == len(names)
-            if names else True)
-
-    assert (len(set(a.shape[1] for a in approximation_sets)) == 1
-            and sort_by_col < approximation_sets[0].shape[1])
+    assert sort_by_col < approximation_sets[0].shape[1]
 
     # order the approximation sets by the chosen objective function
     approximation_sets = [a[a[:, sort_by_col].argsort()]
@@ -354,8 +394,8 @@ def distance_and_distribution_chart(approximation_sets, names=None,
     fig_distribution_metric = dict(data=data_distribution_metric,
                                    layout=layout_distribution_metric)
 
-    return ([fig_distance_metric, fig_distribution_metric], distances,
-            distributions)
+    return {'figures': [fig_distance_metric, fig_distribution_metric],
+            'distances': distances, 'distributions': distributions}
 
 if __name__ == "__main__":
     pass
