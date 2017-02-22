@@ -195,8 +195,6 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
            Pareto Frontier", G. Agrawal , C. L. Bloebaum , K. Lewis,
            University at Buffalo
     """
-    # TODO: camera settings
-
     def index_pairing(binned_vec):
         def pair():  # Cantor's pairing function
             return int((x+y) * (x+y+1) / 2 + y)
@@ -267,11 +265,14 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
                                          name=names[i] if names else '',
                                          mode='lines'))
 
-    layout = graph_objs.Layout(title='Hyper Space Diagonal Counting',
-                               scene=graph_objs.Scene(
-                                   xaxis=graph_objs.XAxis(title=axis[0]),
-                                   yaxis=graph_objs.YAxis(title=axis[1]),
-                                   zaxis=graph_objs.ZAxis(title=axis[2])))
+    layout = graph_objs.Layout(
+        title='Hyper Space Diagonal Counting',
+        scene=graph_objs.Scene(xaxis=graph_objs.XAxis(title=axis[0]),
+                               yaxis=graph_objs.YAxis(title=axis[1]),
+                               zaxis=graph_objs.ZAxis(title=axis[2]),
+                               camera=dict(up=dict(x=0, y=0, z=1),
+                                           center=dict(x=0, y=0, z=0),
+                                           eye=dict(x=0.4, y=-1.85, z=1.5))))
 
     fig = dict(data=data, layout=layout)
     return {'figures': [fig]}
