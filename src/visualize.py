@@ -143,14 +143,14 @@ def create_custom_html_document(figures, link_plots=False):
 
 
 def custom_assertions(visualization_method):
-    def inner(approximation_sets, names=None, *args):
-        # approximation sets must be forwarded, at least 2 dims required
-        assert approximation_sets and approximation_sets[0].shape[1] > 1
-        # equal number of approximation sets and names
-        assert len(approximation_sets) == len(names) if names else True
-        # equal number of objectives (dims) for all approximation sets
-        assert len(set(a.shape[1] for a in approximation_sets)) == 1
-        return visualization_method(approximation_sets, names, *args)
+    def inner(approximation_sets, names=None, **kwargs):
+            # approximation sets must be forwarded, at least 2 dims required
+            assert approximation_sets and approximation_sets[0].shape[1] > 1
+            # equal number of approximation sets and names
+            assert len(approximation_sets) == len(names) if names else True
+            # equal number of objectives (dims) for all approximation sets
+            assert len(set(a.shape[1] for a in approximation_sets)) == 1
+            return visualization_method(approximation_sets, names, **kwargs)
 
     return inner
 
@@ -328,7 +328,9 @@ def distance_and_distribution_chart(approximation_sets, names=None,
            Kay Chen Tan, Meng Hiot Lim, Xin Yao, Lipo Wang,
            World Scientific, 2004
     """
-    assert sort_by_col < approximation_sets[0].shape[1]
+    if not sort_by_col < approximation_sets[0].shape[1]:
+        raise IndexError('index {} is out of bounds for axis 1 with size {}'
+                         .format(sort_by_col, approximation_sets[0].shape[1]))
 
     # order the approximation sets by the chosen objective
     approximation_sets = [a[a[:, sort_by_col].argsort()]
@@ -405,6 +407,45 @@ def distance_and_distribution_chart(approximation_sets, names=None,
 
     return {'figures': [fig_distance_metric, fig_distribution_metric],
             'distances': distances, 'distributions': distributions}
+
+
+@custom_assertions
+def scatter_plot_matrix(approximation_sets, names=None):
+    """
+    Base visualization.
+
+    Parameters
+    ----------
+    approximation_sets : list of ndarray
+        Visualize these approximation sets.
+    names : list of str
+        Optional list of approximation sets' names.
+
+    Returns
+    -------
+    A dictionary with the following key: value pairs is returned.
+
+    figures : list of Figure
+        A single figure is included.
+    """
+    names = names if names else ['Set{}'.format(i) for i in
+                                 range(len(approximation_sets))]
+
+    # create a pandas dataframe
+    df = pd.DataFrame(data=np.row_stack(approximation_sets),
+                      columns=['f{}'.format(i) for i in
+                               range(approximation_sets[0].shape[1])])
+
+    # denote the data sets
+    df['Sets'] = pd.Series(sum([[name] * approximation_sets[i].shape[0]
+                                for i, name in enumerate(names)], []))
+
+    # create a figure
+    fig = FF.create_scatterplotmatrix(df, index='Sets', diag='box',
+                                      size=10, height=1000, width=1000)
+
+    return {'figures': [fig]}
+
 
 if __name__ == "__main__":
     lin_approx_set = np.loadtxt("../MOViE-mnozice/4d.linear.300.txt")
