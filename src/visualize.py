@@ -144,13 +144,20 @@ def create_custom_html_document(figures, link_plots=False):
 
 def custom_assertions(visualization_method):
     def inner(approximation_sets, names=None, **kwargs):
-            # approximation sets must be forwarded, at least 2 dims required
-            assert approximation_sets and approximation_sets[0].shape[1] > 1
-            # equal number of approximation sets and names
-            assert len(approximation_sets) == len(names) if names else True
-            # equal number of objectives (dims) for all approximation sets
-            assert len(set(a.shape[1] for a in approximation_sets)) == 1
-            return visualization_method(approximation_sets, names, **kwargs)
+        if not approximation_sets or approximation_sets[0].shape[1] < 2:
+            raise ValueError('forwarded approximation sets must be of type '
+                             'ndarray and the number of columns/objectives '
+                             '(axis 1) must be at least 2')
+
+        if not (len(approximation_sets) == len(names) if names else True):
+            raise ValueError('if names vector is forwarded, its length must '
+                             'match the number of approximation sets')
+
+        if not (len(set(a.shape[1] for a in approximation_sets)) == 1):
+            raise ValueError('forwarded approximation sets must have the same '
+                             'number of columns/objectives (axis 1)')
+
+        return visualization_method(approximation_sets, names, **kwargs)
 
     return inner
 
@@ -231,8 +238,8 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
 
     # generate axis identifiers for late use
     num_dim = approximation_sets[0].shape[1]
-    axis = (','.join('f{}'.format(i) for i in range(int(num_dim/2))),
-            ','.join('f{}'.format(i) for i in range(int(num_dim/2), num_dim)),
+    axis = (','.join('f{}'.format(i+1) for i in range(int(num_dim/2))),
+            ','.join('f{}'.format(i+1) for i in range(int(num_dim/2), num_dim)),
             'number of vectors')
 
     # if more than 2 dims, represent multiple objectives on each single axis
@@ -412,7 +419,7 @@ def distance_and_distribution_chart(approximation_sets, names=None,
 @custom_assertions
 def scatter_plot_matrix(approximation_sets, names=None):
     """
-    Base visualization.
+    Base visualization method.
 
     Parameters
     ----------
@@ -428,12 +435,12 @@ def scatter_plot_matrix(approximation_sets, names=None):
     figures : list of Figure
         A single figure is included.
     """
-    names = names if names else ['Set{}'.format(i) for i in
+    names = names if names else ['Set{}'.format(i+1) for i in
                                  range(len(approximation_sets))]
 
     # create a pandas dataframe
     df = pd.DataFrame(data=np.row_stack(approximation_sets),
-                      columns=['f{}'.format(i) for i in
+                      columns=['f{}'.format(i+1) for i in
                                range(approximation_sets[0].shape[1])])
 
     # denote the data sets
@@ -443,6 +450,40 @@ def scatter_plot_matrix(approximation_sets, names=None):
     # create a figure
     fig = FF.create_scatterplotmatrix(df, index='Sets', diag='box',
                                       size=10, height=1000, width=1000)
+
+    return {'figures': [fig]}
+
+
+@custom_assertions
+def scatter_plot_3d(approximation_sets, names=None):
+    """
+    Base visualization method.
+
+    Parameters
+    ----------
+    approximation_sets : list of ndarray
+        Visualize these approximation sets.
+    names : list of str
+        Optional list of approximation sets' names.
+
+    Returns
+    -------
+    A dictionary with the following key: value pairs is returned.
+
+    figures : list of Figure
+        A single figure is included.
+    """
+    if approximation_sets[0].shape[1] != 3:
+        raise ValueError('3d scatter plot accepts approximation sets of size '
+                         'Mx3; the number of columns/objectives (axis 1) must '
+                         'be 3)')
+
+    data = [graph_objs.Scatter3d(x=a[:, 0], y=a[:, 1], z=a[:, 2],
+                                 mode='markers', hoverinfo='none')
+            for a in approximation_sets]
+
+    layout = graph_objs.Layout(title='3d Scatter Plot')
+    fig = graph_objs.Figure(data=data, layout=layout)
 
     return {'figures': [fig]}
 
