@@ -479,10 +479,49 @@ def scatter_plot_3d(approximation_sets, names=None):
                          'be 3)')
 
     data = [graph_objs.Scatter3d(x=a[:, 0], y=a[:, 1], z=a[:, 2],
-                                 mode='markers', hoverinfo='none')
-            for a in approximation_sets]
+                                 mode='markers', hoverinfo='none',
+                                 name=names[i] if names else '')
+            for i, a in enumerate(approximation_sets)]
 
     layout = graph_objs.Layout(title='3d Scatter Plot')
+    fig = graph_objs.Figure(data=data, layout=layout)
+
+    return {'figures': [fig]}
+
+
+@custom_assertions
+def scatter_plot_pca(approximation_sets, names=None):
+    """
+    Visualisation method.
+
+    PCA dimensionality reduction.
+
+    Parameters
+    ----------
+    approximation_sets : list of ndarray
+        Visualize these approximation sets.
+    names : list of str
+        Optional list of approximation sets' names.
+
+    Returns
+    -------
+    A dictionary with the following key: value pairs is returned.
+
+    figures : list of Figure
+        A single figure is included.
+    """
+    pca = PCA(n_components=2)
+    transformed = [pca.fit(a).transform(a) for a in
+                   [(a - np.mean(a, 0)) / np.std(a, 0)
+                    for a in approximation_sets]]
+
+    data = [graph_objs.Scatter(x=smh[:, 0], y=smh[:, 1], mode='markers',
+                               name=names[i] if names else '')
+            for i, smh in enumerate(transformed)]
+
+    layout = graph_objs.Layout(autosize=False, width=900, height=700,
+                               hovermode='closest', title='PCA Scatter Plot')
+
     fig = graph_objs.Figure(data=data, layout=layout)
 
     return {'figures': [fig]}
