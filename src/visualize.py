@@ -157,6 +157,9 @@ def custom_assertions(visualization_method):
             raise ValueError('forwarded approximation sets must have the same '
                              'number of columns/objectives (axis 1)')
 
+        names = names if names else ['Set{}'.format(i + 1) for i in
+                                     range(len(approximation_sets))]
+
         return visualization_method(approximation_sets, names, **kwargs)
 
     return inner
@@ -212,15 +215,15 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
         def elegant_pair():  # http://szudzik.com/ElegantPairing.pdf
             return int(y**2 + x if x < y else x**2 + x + y)
 
-        num_dim = binned_vec.size
-        if num_dim == 1:
+        m = binned_vec.size
+        if m == 1:
             return binned_vec.tolist()
-        if num_dim == 2:
+        if m == 2:
             x, y = binned_vec
             return [another_pair()]
 
-        return index_pairing(index_pairing(binned_vec[:int(num_dim/2)]) +
-                             index_pairing(binned_vec[int(num_dim/2):])
+        return index_pairing(index_pairing(binned_vec[:int(m/2)]) +
+                             index_pairing(binned_vec[int(m/2):])
                              if binned_vec.size % 2 == 1 else
                              index_pairing(binned_vec[:2]) +
                              index_pairing(binned_vec[2:]))
@@ -237,13 +240,13 @@ def hyper_space_diagonal_counting(approximation_sets, names=None, num_bins=5):
                           for a in approximation_sets]
 
     # generate axis identifiers for late use
-    num_dim = approximation_sets[0].shape[1]
-    axis = (','.join('f{}'.format(i+1) for i in range(int(num_dim/2))),
-            ','.join('f{}'.format(i+1) for i in range(int(num_dim/2), num_dim)),
+    m = approximation_sets[0].shape[1]
+    axis = (','.join('f{}'.format(i+1) for i in range(int(m/2))),
+            ','.join('f{}'.format(i+1) for i in range(int(m/2), m)),
             'number of vectors')
 
     # if more than 2 dims, represent multiple objectives on each single axis
-    approximation_sets = (approximation_sets if num_dim == 2 else
+    approximation_sets = (approximation_sets if m == 2 else
                           [np.row_stack(index_pairing(vec[:int(vec.size/2)]) +
                                         index_pairing(vec[int(vec.size/2):])
                                         for vec in a)
@@ -354,7 +357,7 @@ def distance_and_distribution_chart(approximation_sets, names=None,
     # Pareto front approximation ordered by the chosen objective
     p_approx = combined[non_dominated_indices]
     p_approx = p_approx[p_approx[:, sort_by_col].argsort()]
-    p_span = np.amax(p_approx, axis=0) - np.amin(p_approx, axis=0)
+    p_span = np.ptp(p_approx, axis=0)
 
     # calculate split indices to later partition the distance vector
     cnt = 0
@@ -417,6 +420,82 @@ def distance_and_distribution_chart(approximation_sets, names=None,
 
 
 @custom_assertions
+def radviz(approximation_sets, names=None):
+    to_plot = {}
+    for kls in names:
+        to_plot[kls] = [[], []]
+
+    # combine and norm
+    combined = np.row_stack(approximation_sets)
+    approximation_sets = [(a-combined.min(0) / combined.ptp(0))
+                          for a in approximation_sets]
+
+    m = approximation_sets[0].shape[1]
+    s = np.array([(np.cos(t), np.sin(t))
+                  for t in [2.0 * np.pi * (i / float(m))
+                            for i in range(m)]])
+
+    for i, a in enumerate(approximation_sets):
+        kls = names[i]
+        for row in a:
+            row_ = np.repeat(np.expand_dims(row, axis=1), 2, axis=1)
+            y = (s * row_).sum(axis=0) / row.sum()
+            to_plot[kls][0].append(y[0])
+            to_plot[kls][1].append(y[1])
+
+    data = []
+    for i, kls in enumerate(names):
+        data.append(graph_objs.Scatter(x=to_plot[kls][0], y=to_plot[kls][1],
+                                       mode='markers',
+                                       name=names[i] if names else ''))
+
+    annotations = [dict(x=smh[0]-0.04 if smh[0] < -0.5 else smh[0]+0.04
+                        if smh[0] > 0.5 else smh[0],
+                        y=smh[1]-0.04 if smh[1] < -0.5 else smh[1]+0.04
+                        if smh[1] > 0.5 else smh[1],
+                        xref='x',
+                        yref='y',
+                        text='f{}'.format(i+1),
+                        showarrow=False,
+                        arrowhead=2,
+                        ax=20 if smh[0] > 0 and smh[1] > 0 else -20,
+                        ay=-30,
+                        font=dict(family='Courier New, monospace',
+                                  size=16,
+                                  color='#ffffff'),
+                        align='center',
+                        arrowsize=1,
+                        arrowwidth=2,
+                        arrowcolor='#636363',
+                        bordercolor='#c7c7c7',
+                        borderwidth=2,
+                        borderpad=4,
+                        bgcolor='#ff7f0e',
+                        opacity=0.8)
+                   for i, smh in enumerate(s)]
+
+    layout = graph_objs.Layout(hovermode='closest',
+                               title='Radviz',
+                               xaxis=dict(range=[-1.1, 1.1]),
+                               yaxis=dict(range=[-1.1, 1.1]),
+                               width=700,
+                               height=700,
+                               shapes=[{'type': 'circle',
+                                        'xref': 'x',
+                                        'yref': 'y',
+                                        'x0': -1,
+                                        'y0': -1,
+                                        'x1': 1,
+                                        'y1': 1,
+                                        'line': {'color': 'grey'}}],
+                               annotations=annotations)
+
+    fig = graph_objs.Figure(data=data, layout=layout)
+
+    return {'figures': [fig]}
+
+
+@custom_assertions
 def scatter_plot_matrix(approximation_sets, names=None):
     """
     Base visualization method.
@@ -435,9 +514,6 @@ def scatter_plot_matrix(approximation_sets, names=None):
     figures : list of Figure
         A single figure is included.
     """
-    names = names if names else ['Set{}'.format(i+1) for i in
-                                 range(len(approximation_sets))]
-
     # create a pandas dataframe
     df = pd.DataFrame(data=np.row_stack(approximation_sets),
                       columns=['f{}'.format(i+1) for i in
@@ -490,6 +566,28 @@ def scatter_plot_3d(approximation_sets, names=None):
 
 
 @custom_assertions
+def scatter_plot(approximation_sets, names=None):
+    """
+    Base visualisation method.
+    """
+    if approximation_sets[0].shape[1] != 2:
+        raise ValueError('Scatter plot accepts approximation sets of size '
+                         'Mx2; the number of columns/objectives (axis 1) must '
+                         'be 2)')
+
+    data = [graph_objs.Scatter(x=smh[:, 0], y=smh[:, 1], mode='markers',
+                               name=names[i] if names else '')
+            for i, smh in enumerate(approximation_sets)]
+
+    layout = graph_objs.Layout(autosize=False, width=900, height=700,
+                               hovermode='closest', title='Scatter Plot')
+
+    fig = graph_objs.Figure(data=data, layout=layout)
+
+    return {'figures': [fig]}
+
+
+@custom_assertions
 def scatter_plot_pca(approximation_sets, names=None):
     """
     Visualisation method.
@@ -528,10 +626,11 @@ def scatter_plot_pca(approximation_sets, names=None):
 
 
 if __name__ == "__main__":
-    lin_approx_set = np.loadtxt("../MOViE-mnozice/4d.linear.300.txt")
-    sph_approx_set = np.loadtxt("../MOViE-mnozice/4d.spherical.300.txt")
-
-    output = hyper_space_diagonal_counting([lin_approx_set, sph_approx_set],
-                                           names=('linear', 'spherical'))
+    lin_approx_set = np.loadtxt("../MOViE-mnozice/3d.linear.txt")
+    sph_approx_set = np.loadtxt("../MOViE-mnozice/3d.spherical.txt")
+    output = radviz([lin_approx_set, sph_approx_set],
+                    names=('linear', 'spherical'))
 
     create_custom_html_document(output['figures'])
+
+    output = distance_and_distribution_chart([lin_approx_set, sph_approx_set])
