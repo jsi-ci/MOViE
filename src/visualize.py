@@ -427,7 +427,7 @@ def radviz(approximation_sets, names=None):
 
     # combine and norm
     combined = np.row_stack(approximation_sets)
-    approximation_sets = [(a-combined.min(0) / combined.ptp(0))
+    approximation_sets = [(a-combined.min(0)) / combined.ptp(0)
                           for a in approximation_sets]
 
     m = approximation_sets[0].shape[1]
@@ -579,7 +579,7 @@ def scatter_plot(approximation_sets, names=None):
                                name=names[i] if names else '')
             for i, smh in enumerate(approximation_sets)]
 
-    layout = graph_objs.Layout(autosize=False, width=900, height=700,
+    layout = graph_objs.Layout(autosize=True, width=700, height=700,
                                hovermode='closest', title='Scatter Plot')
 
     fig = graph_objs.Figure(data=data, layout=layout)
@@ -628,9 +628,8 @@ def scatter_plot_pca(approximation_sets, names=None):
 if __name__ == "__main__":
     lin_approx_set = np.loadtxt("../MOViE-mnozice/3d.linear.txt")
     sph_approx_set = np.loadtxt("../MOViE-mnozice/3d.spherical.txt")
-    output = radviz([lin_approx_set, sph_approx_set],
-                    names=('linear', 'spherical'))
+    koleno = np.loadtxt("../MOViE-mnozice/koleno3d.txt")
+    output = scatter_plot_3d([koleno],)
 
+    output = radviz([lin_approx_set, sph_approx_set])
     create_custom_html_document(output['figures'])
-
-    output = distance_and_distribution_chart([lin_approx_set, sph_approx_set])
