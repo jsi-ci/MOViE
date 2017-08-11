@@ -628,8 +628,8 @@ def scatter_plot_pca(approximation_sets, names=None):
 if __name__ == "__main__":
     lin_approx_set = np.loadtxt("../sets/3d.linear.txt")
     sph_approx_set = np.loadtxt("../sets/3d.spherical.txt")
-    koleno = np.loadtxt("../sets/koleno3d.txt")
-    output = scatter_plot_3d([koleno],)
+    knee_approx_set = np.loadtxt("../sets/3d.deb3d1.txt")
+    output = scatter_plot_3d([knee_approx_set],)
 
-    output = radviz([lin_approx_set, sph_approx_set])
+    #output = radviz([lin_approx_set, sph_approx_set])
     create_custom_html_document(output['figures'])
